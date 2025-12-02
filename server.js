@@ -161,23 +161,23 @@ app.post("/api/run-flow", async (req, res) => {
       return res.json({ error: "Submit failed", assessmentId, result });
     }
 
-    // Step 4: Review assessment
-    const reviewBody = {
-      assessmentId,
-      resultId: OT_RESULT_ID,
-      reviewStatus: "Completed"
-    };
+// Step 4: Review assessment (use v1/review endpoint)
+const reviewBody = {
+  resultId: OT_RESULT_ID
+};
 
-    const reviewResp = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments/${assessmentId}/reviews`, {
-      method: "POST", headers: otHeaders(), body: JSON.stringify(reviewBody)
-    });
-    const reviewText = await reviewResp.text();
-    console.log("Review response raw:", reviewText);
-    result.steps.push({ step: "review", status: reviewResp.status, body: reviewText });
+const reviewResp = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v1/assessments/${assessmentId}/review`, {
+  method: "POST",
+  headers: otHeaders(),
+  body: JSON.stringify(reviewBody)
+});
+const reviewText = await reviewResp.text();
+console.log("Review response raw:", reviewText);
+result.steps.push({ step: "review", status: reviewResp.status, body: reviewText });
 
-    if (reviewResp.status < 200 || reviewResp.status >= 300) {
-      return res.json({ error: "Review failed", assessmentId, result });
-    }
+if (reviewResp.status < 200 || reviewResp.status >= 300) {
+  return res.json({ error: "Review failed", assessmentId, result });
+}
 
     res.json({ message: "Assessment flow completed", assessmentId, result });
 
