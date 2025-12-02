@@ -88,37 +88,33 @@ app.post("/api/run-flow", async (req, res) => {
     }
 
     // Step 2: Save responses (WordPress schema mirrored)
-    const responsesBody = {
-      sectionId: OT_SECTION_ID,
-      responses: [
-        {
-          questionId: OT_QUESTION_ID1,
-          responseId: OT_RESPONSE_ID1,
-          respondentId: OT_RESPONDENT_ID,
-          respondentName,
-          isRespondentOfApproverSection: false
-        },
-        {
-          questionId: OT_QUESTION_ID2,
-          responseId: OT_RESPONSE_ID2,
-          respondentId: OT_RESPONDENT_ID,
-          respondentName,
-          isRespondentOfApproverSection: false
-        },
-        {
-          questionId: OT_QUESTION_ID3,
-          responseId: OT_RESPONSE_ID3,
-          respondentId: OT_RESPONDENT_ID,
-          respondentName,
-          isRespondentOfApproverSection: false
-        }
-      ]
-    };
+const responsesBody = {
+  sectionId: OT_SECTION_ID,
+  responses: [
+    {
+      questionId: OT_QUESTION_ID1,
+      responseId: OT_RESPONSE_ID1,
+      respondentId: OT_RESPONDENT_ID,
+      respondentName,
+      isRespondentOfApproverSection: false
+    },
+    {
+      questionId: OT_QUESTION_ID2,
+      responseId: OT_RESPONSE_ID2,
+      respondentId: OT_RESPONDENT_ID,
+      respondentName,
+      isRespondentOfApproverSection: false
+    },
+    {
+      questionId: OT_QUESTION_ID3,
+      responseId: OT_RESPONSE_ID3,
+      respondentId: OT_RESPONDENT_ID,
+      respondentName,
+      isRespondentOfApproverSection: false
+    }
+  ]
+};
 
-    const respSave = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments/${assessmentId}/responses`, {
-      method: "POST", headers: otHeaders(), body: JSON.stringify(responsesBody)
-    });
-    result.steps.push({ step: "responses", status: respSave.status });
 
     // Step 3: Submit assessment
     const submitResp = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments/${assessmentId}/submit`, {
