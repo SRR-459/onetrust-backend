@@ -28,6 +28,7 @@ const OT_RESPONSE_ID2 = process.env.OT_RESPONSE_ID2;
 const OT_RESPONSE_ID3 = process.env.OT_RESPONSE_ID3;
 const OT_RESULT_ID = process.env.OT_RESULT_ID;
 const OT_BEARER_TOKEN = process.env.OT_BEARER_TOKEN;
+const OT_RESPONDENT_ID = process.env.OT_RESPONDENT_ID; // must be valid GUID
 
 // Helper for headers
 const otHeaders = () => ({
@@ -44,22 +45,23 @@ app.get("/health", (req, res) => {
 // Main flow
 app.post("/api/run-flow", async (req, res) => {
   const { q1, q2, name } = req.body;
+  const respondentName = name || "Anonymous";
   const result = { input: { q1, q2, name }, steps: [] };
 
   try {
-    // Step 1: Create assessment (aligned with WordPress schema)
+    // Step 1: Create assessment (WordPress schema mirrored)
     const createBody = {
       respondents: [{
         isRespondentOfApproverSection: false,
-        respondentId: "form-" + Date.now(),
-        respondentName: name || "Anonymous"
+        respondentId: OT_RESPONDENT_ID,
+        respondentName
       }],
       respondentCreationType: "PROJECT_RESPONDENT",
       userAssignmentMode: "ASSESSMENT",
       creationSource: "DEFAULT",
       checkForInFlightAssessments: false,
       duplicateNotAllowed: false,
-      name: `Assessment - ${new Date().toISOString()}`,
+      name: `WP Assessment - ${new Date().toISOString()}`,
       orgGroupId: OT_ORG_GROUP_GUID,
       templateRootVersionId: OT_TEMPLATE_GUID
     };
@@ -85,13 +87,31 @@ app.post("/api/run-flow", async (req, res) => {
       return res.json({ error: "No assessmentId", result });
     }
 
-    // Step 2: Save responses (always "accept")
+    // Step 2: Save responses (WordPress schema mirrored)
     const responsesBody = {
       sectionId: OT_SECTION_ID,
       responses: [
-        { questionId: OT_QUESTION_ID1, responseId: OT_RESPONSE_ID1 },
-        { questionId: OT_QUESTION_ID2, responseId: OT_RESPONSE_ID2 },
-        { questionId: OT_QUESTION_ID3, responseId: OT_RESPONSE_ID3 }
+        {
+          questionId: OT_QUESTION_ID1,
+          responseId: OT_RESPONSE_ID1,
+          respondentId: OT_RESPONDENT_ID,
+          respondentName,
+          isRespondentOfApproverSection: false
+        },
+        {
+          questionId: OT_QUESTION_ID2,
+          responseId: OT_RESPONSE_ID2,
+          respondentId: OT_RESPONDENT_ID,
+          respondentName,
+          isRespondentOfApproverSection: false
+        },
+        {
+          questionId: OT_QUESTION_ID3,
+          responseId: OT_RESPONSE_ID3,
+          respondentId: OT_RESPONDENT_ID,
+          respondentName,
+          isRespondentOfApproverSection: false
+        }
       ]
     };
 
