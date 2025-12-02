@@ -1,25 +1,122 @@
-// Step 1: Create assessment
-const createBody = {
-  respondents: [{ respondentId: "form-" + Date.now(), respondentName: name }],
-  orgGroupId: OT_ORG_GROUP_GUID,
-  templateRootVersionId: OT_TEMPLATE_GUID,
-  name: `Assessment - ${new Date().toISOString()}`
-};
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import fetch from "node-fetch";
 
-const createResp = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments`, {
-  method: "POST", headers: otHeaders(), body: JSON.stringify(createBody)
+dotenv.config();
+const app = express();
+app.use(express.json());
+
+// Allow your GitHub Pages origin
+app.use(cors({
+  origin: ["https://srr-459.github.io"],
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
+
+// Environment variables
+const PORT = process.env.PORT || 10000;
+const OT_TENANT_BASE_URL = process.env.OT_TENANT_BASE_URL;
+const OT_TEMPLATE_GUID = process.env.OT_TEMPLATE_GUID;
+const OT_ORG_GROUP_GUID = process.env.OT_ORG_GROUP_GUID;
+const OT_SECTION_ID = process.env.OT_SECTION_ID;
+const OT_QUESTION_ID1 = process.env.OT_QUESTION_ID1;
+const OT_QUESTION_ID2 = process.env.OT_QUESTION_ID2;
+const OT_QUESTION_ID3 = process.env.OT_QUESTION_ID3;
+const OT_RESPONSE_ID1 = process.env.OT_RESPONSE_ID1;
+const OT_RESPONSE_ID2 = process.env.OT_RESPONSE_ID2;
+const OT_RESPONSE_ID3 = process.env.OT_RESPONSE_ID3;
+const OT_RESULT_ID = process.env.OT_RESULT_ID;
+const OT_BEARER_TOKEN = process.env.OT_BEARER_TOKEN;
+
+// Helper for headers
+const otHeaders = () => ({
+  "Authorization": `Bearer ${OT_BEARER_TOKEN}`,
+  "Content-Type": "application/json"
 });
 
-// Capture raw text for debugging
-const createText = await createResp.text();
-console.log("Create response raw:", createText);
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
 
-let createData;
-try {
-  createData = JSON.parse(createText);
-} catch {
-  createData = { raw: createText };
-}
+// Main flow
+app.post("/api/run-flow", async (req, res) => {
+  const { q1, q2, name } = req.body;
+  const result = { input: { q1, q2, name }, steps: [] };
 
-const assessmentId = createData.assessmentId;
-result.steps.push({ step: "create", status: createResp.status, assessmentId, error: createData });
+  try {
+    // Step 1: Create assessment
+    const createBody = {
+      respondents: [{ respondentId: "form-" + Date.now(), respondentName: name }],
+      orgGroupId: OT_ORG_GROUP_GUID,
+      templateRootVersionId: OT_TEMPLATE_GUID,
+      name: `Assessment - ${new Date().toISOString()}`
+    };
+
+    const createResp = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments`, {
+      method: "POST", headers: otHeaders(), body: JSON.stringify(createBody)
+    });
+
+    const createText = await createResp.text();
+    console.log("Create response raw:", createText);
+
+    let createData;
+    try {
+      createData = JSON.parse(createText);
+    } catch {
+      createData = { raw: createText };
+    }
+
+    const assessmentId = createData.assessmentId;
+    result.steps.push({ step: "create", status: createResp.status, assessmentId, error: createData });
+
+    if (!assessmentId) {
+      return res.json({ error: "No assessmentId", result });
+    }
+
+    // Step 2: Save responses (always "accept")
+    const responsesBody = {
+      sectionId: OT_SECTION_ID,
+      responses: [
+        { questionId: OT_QUESTION_ID1, responseId: OT_RESPONSE_ID1 },
+        { questionId: OT_QUESTION_ID2, responseId: OT_RESPONSE_ID2 },
+        { questionId: OT_QUESTION_ID3, responseId: OT_RESPONSE_ID3 }
+      ]
+    };
+
+    const respSave = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments/${assessmentId}/responses`, {
+      method: "POST", headers: otHeaders(), body: JSON.stringify(responsesBody)
+    });
+    result.steps.push({ step: "responses", status: respSave.status });
+
+    // Step 3: Submit assessment
+    const submitResp = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments/${assessmentId}/submit`, {
+      method: "POST", headers: otHeaders()
+    });
+    result.steps.push({ step: "submit", status: submitResp.status });
+
+    // Step 4: Review assessment
+    const reviewBody = {
+      assessmentId,
+      resultId: OT_RESULT_ID,
+      reviewStatus: "Completed"
+    };
+
+    const reviewResp = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments/${assessmentId}/reviews`, {
+      method: "POST", headers: otHeaders(), body: JSON.stringify(reviewBody)
+    });
+    result.steps.push({ step: "review", status: reviewResp.status });
+
+    res.json({ message: "Assessment flow completed", assessmentId, result });
+
+  } catch (err) {
+    console.error("Error in run-flow:", err);
+    res.status(500).json({ error: err.message, result });
+  }
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Backend running on port ${PORT}`);
+});
