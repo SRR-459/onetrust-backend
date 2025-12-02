@@ -32,7 +32,8 @@ const OT_BEARER_TOKEN = process.env.OT_BEARER_TOKEN;
 // Helper for headers
 const otHeaders = () => ({
   "Authorization": `Bearer ${OT_BEARER_TOKEN}`,
-  "Content-Type": "application/json"
+  "Content-Type": "application/json",
+  "Accept": "application/json, text/plain"
 });
 
 // Health check
@@ -46,12 +47,21 @@ app.post("/api/run-flow", async (req, res) => {
   const result = { input: { q1, q2, name }, steps: [] };
 
   try {
-    // Step 1: Create assessment
+    // Step 1: Create assessment (aligned with WordPress schema)
     const createBody = {
-      respondents: [{ respondentId: "form-" + Date.now(), respondentName: name }],
+      respondents: [{
+        isRespondentOfApproverSection: false,
+        respondentId: "form-" + Date.now(),
+        respondentName: name || "Anonymous"
+      }],
+      respondentCreationType: "PROJECT_RESPONDENT",
+      userAssignmentMode: "ASSESSMENT",
+      creationSource: "DEFAULT",
+      checkForInFlightAssessments: false,
+      duplicateNotAllowed: false,
+      name: `Assessment - ${new Date().toISOString()}`,
       orgGroupId: OT_ORG_GROUP_GUID,
-      templateRootVersionId: OT_TEMPLATE_GUID,
-      name: `Assessment - ${new Date().toISOString()}`
+      templateRootVersionId: OT_TEMPLATE_GUID
     };
 
     const createResp = await fetch(`${OT_TENANT_BASE_URL}/api/assessment/v2/assessments`, {
@@ -68,7 +78,7 @@ app.post("/api/run-flow", async (req, res) => {
       createData = { raw: createText };
     }
 
-    const assessmentId = createData.assessmentId;
+    const assessmentId = createData.assessmentId || createData.id;
     result.steps.push({ step: "create", status: createResp.status, assessmentId, error: createData });
 
     if (!assessmentId) {
