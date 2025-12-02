@@ -20,12 +20,12 @@ const OT_TENANT_BASE_URL = process.env.OT_TENANT_BASE_URL;
 const OT_TEMPLATE_GUID = process.env.OT_TEMPLATE_GUID;
 const OT_ORG_GROUP_GUID = process.env.OT_ORG_GROUP_GUID;
 const OT_SECTION_ID = process.env.OT_SECTION_ID;
-const OT_QUESTION_ID1 = process.env.OT_QUESTION_ID1;   // Q1 GUID
-const OT_QUESTION_ID2 = process.env.OT_QUESTION_ID2;   // Q2 GUID
-const OT_QUESTION_ID3 = process.env.OT_QUESTION_ID3;   // Q3 GUID (text)
-const OT_RESPONSE_ID1 = process.env.OT_RESPONSE_ID1;   // Response GUID for Q1 ("I Agree")
-const OT_RESPONSE_ID2 = process.env.OT_RESPONSE_ID2;   // Response GUID for Q2 ("I Agree")
-const OT_RESPONSE_ID3 = process.env.OT_RESPONSE_ID3;   // Response GUID for Q3 (text, if required)
+const OT_QUESTION_ID1 = process.env.OT_QUESTION_ID1;
+const OT_QUESTION_ID2 = process.env.OT_QUESTION_ID2;
+const OT_QUESTION_ID3 = process.env.OT_QUESTION_ID3;
+const OT_RESPONSE_ID1 = process.env.OT_RESPONSE_ID1;
+const OT_RESPONSE_ID2 = process.env.OT_RESPONSE_ID2;
+const OT_RESPONSE_ID3 = process.env.OT_RESPONSE_ID3;
 const OT_RESULT_ID = process.env.OT_RESULT_ID;
 const OT_BEARER_TOKEN = process.env.OT_BEARER_TOKEN;
 const OT_RESPONDENT_ID = process.env.OT_RESPONDENT_ID;
@@ -71,22 +71,46 @@ app.post("/api/run-flow", async (req, res) => {
     const createText = await createResp.text();
     console.log("Create response raw:", createText);
 
+    // Robust assessmentId extraction
     let assessmentId = null;
     try {
       const parsed = JSON.parse(createText);
-      assessmentId = parsed.assessmentId || parsed.id || null;
+      if (parsed && typeof parsed === "object") {
+        assessmentId = parsed.assessmentId || parsed.id || null;
+      }
     } catch {
-      const guidMatch = createText.match(/[0-9a-fA-F-]{36}/);
+      // Not JSON, ignore
+    }
+    if (!assessmentId) {
+      const guidMatch = createText.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
       if (guidMatch) assessmentId = guidMatch[0];
     }
-
-    result.steps.push({ step: "create", status: createResp.status, assessmentId, raw: createText });
-
     if (!assessmentId) {
-      return res.json({ error: "No assessmentId", result });
+      const loc = createResp.headers.get("location")
+               || createResp.headers.get("Location")
+               || createResp.headers.get("content-location")
+               || createResp.headers.get("Content-Location");
+      if (loc) {
+        const guidMatch = loc.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+        if (guidMatch) assessmentId = guidMatch[0];
+        else {
+          const parts = loc.split("/");
+          const last = parts[parts.length - 1];
+          const guidMatch2 = last.match(/[0-9a-fA-F-]{36}/);
+          if (guidMatch2) assessmentId = guidMatch2[0];
+        }
+      }
     }
 
-    // Step 2: Save responses (exact working structure)
+    if (!assessmentId) {
+      console.error("No assessmentId extracted", { body: createText, headers: createResp.headers });
+      return res.json({ error: "create_no_id", result });
+    }
+
+    console.log("Extracted assessmentId:", assessmentId);
+    result.steps.push({ step: "create", status: createResp.status, assessmentId });
+
+    // Step 2: Save responses (working structure)
     const responsesBody = [
       {
         assessmentId,
